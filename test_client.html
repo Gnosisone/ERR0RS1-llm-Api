@@ -1,1 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LLM API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; margin-bottom: 30px; }
+        h2 { color: #555; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #333; }
+        input, textarea, select { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
+        input:focus, textarea:focus { border-color: #007bff; outline: none; }
+        button { background: #007bff; color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .response { padding: 20px; border-radius: 8px; margin-top: 20px; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .loading { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        code { background: #f8f9fa; padding: 4px 8px; border-radius: 4px; font-family: monospace; }
+        .step { background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 LLM API Test Client</h1>
+        
+        <div class="step">
+            <strong>🚀 Quick Start Guide:</strong><br>
+            1. Create an API key below → 2. Copy it to the chat section → 3. Start chatting!
+        </div>
+        
+        <h2>🔑 Step 1: Create API Key</h2>
+        <div class="form-group">
+            <label>Key Name:</label>
+            <input type="text" id="keyName" value="My Test Key" placeholder="Give your key a name">
+        </div>
+        <button onclick="createApiKey()">Create API Key</button>
+        <div id="keyResult" class="response" style="display:none;"></div>
+        
+        <h2>💬 Step 2: Test Chat</h2>
+        <div class="form-group">
+            <label>API Key:</label>
+            <input type="text" id="apiKey" placeholder="Paste your API key here">
+        </div>
+        <div class="form-group">
+            <label>Select Model:</label>
+            <select id="model">
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                <option value="mock-model">Mock Model (Demo)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Your Message:</label>
+            <textarea id="message" rows="4" placeholder="Type your message here...">Hello! How are you today?</textarea>
+        </div>
+        <button onclick="sendMessage()">Send Message</button>
+        <div id="chatResult" class="response" style="display:none;"></div>
 
+        <h2>📚 Step 3: View Conversations</h2>
+        <button onclick="getConversations()">Load My Conversations</button>
+        <div id="conversationsResult" class="response" style="display:none;"></div>
+
+        <h2>🔧 API Information</h2>
+        <div class="response success">
+            <strong>Available Endpoints:</strong><br>
+            • <code>POST /v1/chat/completions</code> - Chat with AI<br>
+            • <code>GET /v1/conversations</code> - List conversations<br>
+            • <code>GET /v1/models</code> - Available models<br>
+            • <code>GET /docs</code> - API documentation<br>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        async function createApiKey() {
+            const name = document.getElementById('keyName').value;
+            const resultDiv = document.getElementById('keyResult');
+            
+            if (!name.trim()) {
+                alert('Please enter a name for your API key');
+                return;
+            }
+            
+            resultDiv.className = 'response loading';
+            resultDiv.innerHTML = '<h3>⏳ Creating API key...</h3>';
+            resultDiv.style.display = 'block';
+            
+            try {
+                const response = await fetch(`${API_BASE}/v1/admin/keys`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name: name, 
+                        permissions: ["chat", "admin"],
+                        rate_limit: 1000 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'response success';
+                    resultDiv.innerHTML = `
+                        <h3>✅ API Key Created Successfully!</h3>
+                        <p><strong>Your API Key:</strong></p>
+                        <code style="font-size: 14px; display: block; padding: 10px; background: #f8f9fa; border-radius: 5px; word-break: break-all;">${data.api_key}</code>
+                        <p style="margin-top: 15px;"><strong>⚠️ Important:</strong> Copy this key now! You won't be able to see it again.</p>
+                        <button onclick="copyToChat('${data.api_key}')" style="margin-top: 10px;">📋 Copy to Chat Section</button>
+                    `;
+                } else {
+                    throw new Error(data.detail || 'Failed to create API key');
+                }
+            } catch (error) {
+                resultDiv.className = 'response error';
+                resultDiv.innerHTML = `<h3>❌ Error</h3><p>${error.message}</p>`;
+            }
+        }
+        
+        function copyToChat(apiKey) {
+            document.getElementById('apiKey').value = apiKey;
+            alert('API key copied to chat section! 🎉');
+        }
+        
+        async function sendMessage() {
+            const apiKey = document.getElementById('apiKey').value;
+            const message = document.getElementById('message').value;
+            const model = document.getElementById('model').value;
+            const resultDiv = document.getElementById('chatResult');
+            
+            if (!apiKey.trim()) {
+                alert('Please create and enter an API key first!');
+                return;
+            }
+            
+            if (!message.trim()) {
+                alert('Please enter a message!');
+                return;
+            }
+            
+            resultDiv.className = 'response loading';
+            resultDiv.innerHTML = '<h3>⏳ Sending message to AI...</h3><p>This may take a few seconds...</p>';
+            resultDiv.style.display = 'block';
+            
+            try {
+                const response = await fetch(`${API_BASE}/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        messages: [{ role: "user", content: message }],
+                        model: model,
+                        temperature: 0.7,
+                        max_tokens: 1000
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const botReply = data.choices[0].message.content;
+                    resultDiv.className = 'response success';
+                    resultDiv.innerHTML = `
+                        <h3>🤖 AI Response:</h3>
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0; white-space: pre-wrap;">${botReply}</div>
+                        <hr style="margin: 15px 0;">
+                        <small>
+                            <strong>Model:</strong> ${data.model} | 
+                            <strong>Tokens:</strong> ${data.usage.total_tokens} | 
+                            <strong>Conversation ID:</strong> ${data.conversation_id || 'N/A'}
+                        </small>
+                    `;
+                } else {
+                    throw new Error(data.detail || 'Chat request failed');
+                }
+            } catch (error) {
+                resultDiv.className = 'response error';
+                resultDiv.innerHTML = `<h3>❌ Error</h3><p>${error.message}</p>`;
+            }
+        }
+        
+        async function getConversations() {
+            const apiKey = document.getElementById('apiKey').value;
+            const resultDiv = document.getElementById('conversationsResult');
+            
+            if (!apiKey.trim()) {
+                alert('Please enter your API key first!');
+                return;
+            }
+            
+            resultDiv.className = 'response loading';
+            resultDiv.innerHTML = '<h3>⏳ Loading conversations...</h3>';
+            resultDiv.style.display = 'block';
+            
+            try {
+                const response = await fetch(`${API_BASE}/v1/conversations`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.length === 0) {
+                        resultDiv.className = 'response success';
+                        resultDiv.innerHTML = '<h3>📭 No conversations yet</h3><p>Start chatting to create your first conversation!</p>';
+                    } else {
+                        let conversationsHtml = '<h3>📚 Your Conversations</h3>';
+                        data.forEach(conv => {
+                            conversationsHtml += `
+                                <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px;">
+                                    <strong>Title:</strong> ${conv.title}<br>
+                                    <strong>Messages:</strong> ${conv.message_count}<br>
+                                    <strong>Last Activity:</strong> ${new Date(conv.last_activity).toLocaleString()}<br>
+                                    <strong>ID:</strong> <code>${conv.id}</code>
+                                </div>
+                            `;
+                        });
+                        resultDiv.className = 'response success';
+                        resultDiv.innerHTML = conversationsHtml;
+                    }
+                } else {
+                    throw new Error(data.detail || 'Failed to load conversations');
+                }
+            } catch (error) {
+                resultDiv.className = 'response error';
+                resultDiv.innerHTML = `<h3>❌ Error</h3><p>${error.message}</p>`;
+            }
+        }
+        
+        // Auto-populate with demo values
+        window.addEventListener('load', function() {
+            if (!document.getElementById('message').value) {
+                const demoMessages = [
+                    "Hello! How are you today?",
+                    "Can you explain what an API is?",
+                    "Tell me a joke!",
+                    "What's the weather like?",
+                    "Help me write a Python function"
+                ];
+                const randomMessage = demoMessages[Math.floor(Math.random() * demoMessages.length)];
+                document.getElementById('message').value = randomMessage;
+            }
+        });
+    </script>
+</body>
+</html>
